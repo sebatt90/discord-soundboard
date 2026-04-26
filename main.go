@@ -8,12 +8,15 @@ import (
 	"syscall"
 	"strings"
 	"io"
+	"bytes"
 	"database/sql"
 	
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/bwmarrin/discordgo"
 	"github.com/matthew-balzan/dca"
 )
+
+var db *sql.DB
 
 func main() {
 	token := flag.String("token", "", "Discord bot token")
@@ -25,13 +28,15 @@ func main() {
 	}
 
 	// init db
-	db, err := sql.Open("sqlite3", "data.db")
+	var err error
+	db, err = sql.Open("sqlite3", "data.db")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] db open error (%s)\n", err)
 		os.Exit(1)
 	}
 	defer db.Close()
 
+	// ensure schema
 	_, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS tracks (
         id   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,9 +88,34 @@ func onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+func getTrack(db *sql.DB, query string) (name string, data []byte, err error) {
+	stmt, err := db.Prepare(`SELECT name, data FROM tracks WHERE name LIKE ? LIMIT 1`)
+	if err != nil {
+		return "", nil, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow("%" + query + "%").Scan(&name, &data)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return name, data, nil
+}
+
 func play(s *discordgo.Session, m *discordgo.MessageCreate){
 	var author *discordgo.User = m.Author
 	query := strings.TrimPrefix(m.Content, "!play ")
+	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
+
+	// fetch record
+	name, data, err := getTrack(db, query)
+
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, "\""+query+"\" yielded no results...")
+		return		
+	}
+
 	
 	guild, err := s.State.Guild(m.GuildID)
 	if err != nil {
@@ -114,16 +144,15 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		return
 	}
 
-	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
+	s.ChannelMessageSend(m.ChannelID, "Found closest match: **"+name+"**")
 
 	go func() {
-		encodeSession, err := dca.EncodeFile(query, dca.StdEncodeOptions)
+		encodeSession, err := dca.EncodeMem(bytes.NewReader(data), dca.StdEncodeOptions)
 		if err != nil {
 			fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
 			return
 		}
 		defer encodeSession.Cleanup()
-
 
 		
 		// Stream into the voice connection
