@@ -6,6 +6,8 @@ github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757 h1:Kyv+zTfWIGRNaz/4+l
 github.com/jonas747/ogg v0.0.0-20161220051205-b4f6f4cf3757/go.mod h1:cZnNmdLiLpihzgIVqiaQppi9Ts3D4qF/M45//yW35nI=
 github.com/matthew-balzan/dca v0.0.0-20241016172008-220ff76d22a1 h1:F0yU3JBGLX4Yfw4IFTfnz4qXgtUs/UHMWhc4WQw8dIU=
 github.com/matthew-balzan/dca v0.0.0-20241016172008-220ff76d22a1/go.mod h1:65p+kjlvA3bbt0fE9598VYLAzfDnRRoxPrUPAUjILjY=
+github.com/mattn/go-sqlite3 v1.14.42 h1:MigqEP4ZmHw3aIdIT7T+9TLa90Z6smwcthx+Azv4Cgo=
+github.com/mattn/go-sqlite3 v1.14.42/go.mod h1:pjEuOr8IwzLJP2MfGeTb0A35jauH+C2kbHKBr7yXKVQ=
 github.com/yeongaori/discordgo v0.0.0-20260321152711-3d3293e4c765 h1:AuG3qG+K4LLcrZRdMGJUTjg7hVTIwnbdECl0116W84E=
 github.com/yeongaori/discordgo v0.0.0-20260321152711-3d3293e4c765/go.mod h1:ouzKz7Yuw5RyzMK9WbSH53d5pzjLcjQ58u7hUM/egPI=
 golang.org/x/crypto v0.32.0 h1:euUpcYgM8WcP71gNpTqQCn6rC2t6ULUPiOzfWaXVVfc=

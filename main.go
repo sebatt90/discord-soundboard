@@ -8,7 +8,9 @@ import (
 	"syscall"
 	"strings"
 	"io"
-
+	"database/sql"
+	
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/bwmarrin/discordgo"
 	"github.com/matthew-balzan/dca"
 )
@@ -22,6 +24,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// init db
+	db, err := sql.Open("sqlite3", "data.db")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] db open error (%s)\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	_, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS tracks (
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        data BLOB NOT NULL
+    )
+`)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] db init error (%s)\n", err)
+		os.Exit(1)
+	}
+	
 	bot, err := discordgo.New("Bot " + *token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,"[ERROR] Couldn't create Discord session (%s)\n", err)
