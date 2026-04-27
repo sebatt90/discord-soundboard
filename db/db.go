@@ -1,9 +1,10 @@
-// db/db.go
 package db
 
 import (
 	"database/sql"
+	
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/sebatt90/discord-soundboard/models"
 )
 
 var DB *sql.DB
@@ -25,15 +26,15 @@ func Init(path string) error {
 	return err
 }
 
-func GetTrack(query string) (name string, data []byte, err error) {
+func GetTrack(query string) (track models.Track, err error) {
 	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE name LIKE ? LIMIT 1`)
 	if err != nil {
-		return "", nil, err
+		return track, err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow("%" + query + "%").Scan(&name, &data)
-	return name, data, err
+	err = stmt.QueryRow("%" + query + "%").Scan(&track.Name, &track.Data)
+	return track, err
 }
 
 func Close() {

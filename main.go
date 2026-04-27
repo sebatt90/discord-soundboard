@@ -74,22 +74,13 @@ func onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 func play(s *discordgo.Session, m *discordgo.MessageCreate){
 	var author *discordgo.User = m.Author
 	query := strings.TrimPrefix(m.Content, "!play ")
-	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
 
-	// fetch record
-	name, data, err := db.GetTrack(query)
-
-	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, "\"**"+query+"**\" yielded no results...")
-		return		
-	}
-
-	
 	guild, err := s.State.Guild(m.GuildID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Could not find guild.\n")
 		return
 	}
+
 
 	var voiceChannelID string
 	for _, vs := range guild.VoiceStates {
@@ -111,11 +102,22 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		fmt.Fprintf(os.Stderr,"[ERROR] joining voice channel (%s)\n", err)
 		return
 	}
+	
+	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
 
-	s.ChannelMessageSend(m.ChannelID, "Found closest match: **"+name+"**")
+	// fetch record
+	track, err := db.GetTrack(query)
+
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, "\"**"+query+"**\" yielded no results...")
+		return		
+	}
+
+	
+	s.ChannelMessageSend(m.ChannelID, "Found closest match: **"+track.Name+"**")
 
 	go func() {
-		encodeSession, err := dca.EncodeMem(bytes.NewReader(data), dca.StdEncodeOptions)
+		encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
 		if err != nil {
 			fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
 			return
