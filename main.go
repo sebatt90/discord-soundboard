@@ -15,6 +15,37 @@ import (
 	"github.com/matthew-balzan/dca"
 )
 
+var q Queue
+var vc *discordgo.VoiceConnection
+
+func startRoutine() {
+	go func() {
+		for true {
+			for q.IsEmpty() { /* ackward wait*/ }
+			track := q.Dequeue()
+			encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
+			if err != nil {
+				fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
+				return
+			}
+			defer encodeSession.Cleanup()
+
+			
+			// Stream into the voice connection
+			vc.Speaking(true)
+			done := make(chan error)
+			dca.NewStream(encodeSession, vc, done)
+			if err := <-done; err != nil && err != io.EOF {
+				fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s) \n", err)
+			}
+
+			vc.Speaking(false)
+
+			fmt.Printf("[INFO] ffmpeg messages: %s\n", encodeSession.FFMPEGMessages())
+		}
+	}()
+
+}
 
 func main() {
 	token := flag.String("token", "", "Discord bot token")
@@ -95,14 +126,17 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		return
 	}
 
-	// Join the voice channel
-	vc, err := s.ChannelVoiceJoin(m.GuildID, voiceChannelID, false, true)
-	if err != nil {
-		s.ChannelMessageSend(m.ChannelID, "Could not join voice channel.")
-		fmt.Fprintf(os.Stderr,"[ERROR] joining voice channel (%s)\n", err)
-		return
+	// Join the voice channel and start routine
+	if vc == nil {
+		vc, err = s.ChannelVoiceJoin(m.GuildID, voiceChannelID, false, false)
+		if err != nil {
+			s.ChannelMessageSend(m.ChannelID, "Could not join voice channel.")
+			fmt.Fprintf(os.Stderr,"[ERROR] joining voice channel (%s)\n", err)
+			return
+		}
+
+		startRoutine()
 	}
-	
 	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
 
 	// fetch record
@@ -114,31 +148,8 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 	}
 
 	
-	s.ChannelMessageSend(m.ChannelID, "Found closest match: **"+track.Name+"**")
+	s.ChannelMessageSend(m.ChannelID, "Enequeued closest match: **"+track.Name+"**")
 
-	go func() {
-		encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
-		if err != nil {
-			fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
-			return
-		}
-		defer encodeSession.Cleanup()
-
-		
-		// Stream into the voice connection
-		vc.Speaking(true)
-		done := make(chan error)
-		dca.NewStream(encodeSession, vc, done)
-		if err := <-done; err != nil && err != io.EOF {
-			fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s) \n", err)
-		}
-
-		vc.Speaking(false)
-
-		fmt.Printf("[INFO] ffmpeg messages: %s\n", encodeSession.FFMPEGMessages())
-		//vc.Disconnect()
-	}()
-	
-	_ = vc // you'll use vc to send audio next
-	
+	// enqueue
+	q.Enqueue(track)
 }
