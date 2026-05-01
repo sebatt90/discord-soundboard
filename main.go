@@ -22,7 +22,9 @@ func startRoutine() {
 	go func() {
 		for true {
 			for q.IsEmpty() { /* ackward wait*/ }
+			if vc == nil { break }
 			track := q.Dequeue()
+			if track == nil { continue }
 			encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
 			if err != nil {
 				fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
@@ -36,7 +38,8 @@ func startRoutine() {
 			done := make(chan error)
 			dca.NewStream(encodeSession, vc, done)
 			if err := <-done; err != nil && err != io.EOF {
-				fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s) \n", err)
+				fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s)\n[INFO] ffmpeg messages: %s\n", err, encodeSession.FFMPEGMessages())
+				return
 			}
 
 			vc.Speaking(false)
@@ -99,6 +102,14 @@ func onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if strings.HasPrefix(m.Content, "!play") {
 		play(s,m)
+	}
+
+	if strings.HasPrefix(m.Content, "!disconnect") {
+		if vc != nil {
+			vc.Disconnect()
+			q.Clear()
+			vc = nil
+		}
 	}
 }
 

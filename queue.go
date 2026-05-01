@@ -33,6 +33,12 @@ func (q *Queue) IsEmpty() (bool) {
 	return len(q.tracks) == 0
 }
 
+func (q *Queue) Clear() {
+	q.mu.Lock()
+	q.tracks = nil
+	q.mu.Unlock()
+}
+
 
 
 
