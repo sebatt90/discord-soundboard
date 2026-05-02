@@ -11,6 +11,7 @@ import (
 	"bytes"
 
 	"github.com/sebatt90/discord-soundboard/db"
+	"github.com/sebatt90/discord-soundboard/web"
 	"github.com/bwmarrin/discordgo"
 	"github.com/matthew-balzan/dca"
 )
@@ -30,7 +31,7 @@ func startRoutine() {
 				fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
 				return
 			}
-			defer encodeSession.Cleanup()
+	 		defer encodeSession.Cleanup()
 
 			
 			// Stream into the voice connection
@@ -51,6 +52,8 @@ func startRoutine() {
 }
 
 func main() {
+	// channel for os.Signal
+	sc := make(chan os.Signal, 1)
 	token := flag.String("token", "", "Discord bot token")
 	flag.Parse()
 
@@ -65,6 +68,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
 	
 	bot, err := discordgo.New("Bot " + *token)
 	if err != nil {
@@ -72,9 +76,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// open web interface
+	go web.Start(sc)
+	
 	// Register event handlers here
 	bot.AddHandler(onReady)
 	bot.AddHandler(onMessage)
+	bot.AddHandler(func(s *discordgo.Session, e *discordgo.GuildCreate) {
+		err := db.InsertGuild(e.ID, e.Name, e.Icon)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] insert guild error (%s)\n", err)
+		}
+	})
 
 	// Declare which intents you need
 	bot.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMessages | discordgo.IntentsGuildVoiceStates
@@ -83,10 +96,11 @@ func main() {
 		fmt.Fprintf(os.Stderr,"[ERROR] opening connection (%s)\n", err)
 	}
 
-	sc := make(chan os.Signal, 1)
+	
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
-	
+	// close everything
+	db.Close()
 	bot.Close()
 }
 
@@ -123,6 +137,13 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		return
 	}
 
+	// Insert guild to DB if not exists
+	err = db.InsertGuild(guild.ID, guild.Name, guild.Icon)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Cannot add guild to DB (%s)\n",err)
+		return
+	}
+
 
 	var voiceChannelID string
 	for _, vs := range guild.VoiceStates {
@@ -151,7 +172,7 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
 
 	// fetch record
-	track, err := db.GetTrack(query)
+	track, err := db.GetTrack(query, guild.ID)
 
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, "\"**"+query+"**\" yielded no results...")

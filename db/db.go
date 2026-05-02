@@ -17,24 +17,84 @@ func Init(path string) error {
 	}
 
 	_, err = DB.Exec(`
-		CREATE TABLE IF NOT EXISTS tracks (
-			id   INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			data BLOB NOT NULL
-		)
+BEGIN TRANSACTION;
+CREATE TABLE IF NOT EXISTS "guilds" (
+	"id"	TEXT,
+	"name"	TEXT NOT NULL,
+	"iconhash" TEXT NOT NULL,
+	PRIMARY KEY("id")
+);
+CREATE TABLE IF NOT EXISTS "tracks" (
+	"id"	INTEGER,
+	"name"	TEXT NOT NULL,
+	"data"	BLOB NOT NULL,
+	"guildid"	TEXT,
+	PRIMARY KEY("id" AUTOINCREMENT),
+	CONSTRAINT "guildid" FOREIGN KEY("guildid") REFERENCES "guilds"("id")
+);
+COMMIT;
 	`)
 	return err
 }
 
-func GetTrack(query string) (track models.Track, err error) {
-	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE name LIKE ? LIMIT 1`)
+func GetTrack(query string, guildid string) (track models.Track, err error) {
+	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE name LIKE ? AND guildid LIKE ? LIMIT 1`)
 	if err != nil {
 		return track, err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow("%" + query + "%").Scan(&track.Name, &track.Data)
+	err = stmt.QueryRow("%" + query + "%",guildid).Scan(&track.Name, &track.Data)
 	return track, err
+}
+
+
+func GetGuilds() (guilds []models.Guild, err error){
+	rows, err := DB.Query(`SELECT id, name, iconhash FROM guilds`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var g models.Guild
+		if err := rows.Scan(&g.ID, &g.Name, &g.IconHash); err != nil {
+			return nil, err
+		}
+		guilds = append(guilds, g)
+	}
+	return guilds, rows.Err()
+}
+
+func GetTracksPerGuild(guildid string) (tracks []models.Track, err error) {
+	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE guildid LIKE ?;`)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	var rows *sql.Rows
+	rows, err = stmt.Query(guildid)
+
+	for rows.Next() {
+		var t models.Track
+		if err := rows.Scan(&t.Name, &t.Data); err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, t)
+	}
+	return tracks, rows.Err()
+}
+
+func InsertGuild(id string, name string, iconhash string) (err error) {
+	stmt, err := DB.Prepare(`INSERT OR REPLACE INTO guilds(id, name, iconhash) VALUES (?,?,?);`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(id,name, iconhash)
+	return err
 }
 
 func Close() {
