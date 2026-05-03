@@ -12,7 +12,7 @@
     {{template "navbar" .}}
 
     <h1>{{.Guild.Name}}</h1>
-    <button type="button" class="btn btn-success">New Soundboard</button>
+    <a href="/guild/{{.Guild.ID}}/new" class="btn btn-success">New Soundboard</a>
     <p>Soundboards: </p>
     {{if .Tracks}}
     <ul class="list-group">

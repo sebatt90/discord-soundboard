@@ -108,6 +108,28 @@ func DeleteTrack(guildID string, trackID int) error {
 	return err
 }
 
+func InsertTrack(guildID string, name string, data []byte) error {
+    stmt, err := DB.Prepare(`INSERT INTO tracks (guildid, name, data) VALUES (?, ?, ?)`)
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+
+    _, err = stmt.Exec(guildID, name, data)
+    return err
+}
+
+func UpdateTrack(id int, name string, data []byte) error {
+    stmt, err := DB.Prepare(`UPDATE tracks SET name = ?, data = ? WHERE id = ?`)
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+
+    _, err = stmt.Exec(name, data, id)
+    return err
+}
+
 func InsertGuild(id string, name string, iconhash string) (err error) {
 	stmt, err := DB.Prepare(`INSERT OR REPLACE INTO guilds(id, name, iconhash) VALUES (?,?,?);`)
 	if err != nil {
