@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/sebatt90/discord-soundboard/db"
+	"github.com/sebatt90/discord-soundboard/models"	
 )
 
 func Start(sc chan os.Signal) {
@@ -47,6 +49,7 @@ func Start(sc chan os.Signal) {
 		tmpl, err := template.ParseFiles(
 			filepath.Join(viewsDir, "guild.html"),
 			filepath.Join(viewsDir, "partial/navbar.html"),
+			filepath.Join(viewsDir, "partial/delete_modal.html"),
 		)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -59,7 +62,43 @@ func Start(sc chan os.Signal) {
 			return
 		}
 
-		tmpl.Execute(w, tracks)
+		guild, err := db.GetGuildByID(req.PathValue("id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = tmpl.Execute(w, struct {
+			Guild models.Guild
+			Tracks []models.Track
+		}{
+			Guild: guild,
+			Tracks: tracks,
+		})
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return			
+		}
+	})
+
+	// Delete
+	mux.HandleFunc("DELETE /guild/{guildid}/track/{trackid}", func (w http.ResponseWriter, r *http.Request) {
+		guildID := r.PathValue("guildid")
+		trackID, err := strconv.Atoi(r.PathValue("trackid"))
+		if err != nil {
+			http.Error(w, "invalid track id", http.StatusBadRequest)
+			return
+		}
+
+		err = db.DeleteTrack(guildID,trackID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		fmt.Printf("[INFO] delete track %d from guild %s\n", trackID, guildID)
+		w.WriteHeader(http.StatusOK)
 	})
 
 	err := http.ListenAndServe(":8080",mux)

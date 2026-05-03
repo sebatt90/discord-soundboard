@@ -38,16 +38,27 @@ COMMIT;
 }
 
 func GetTrack(query string, guildid string) (track models.Track, err error) {
-	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE name LIKE ? AND guildid LIKE ? LIMIT 1`)
+	stmt, err := DB.Prepare(`SELECT id, name, data FROM tracks WHERE name LIKE ? AND guildid LIKE ? LIMIT 1`)
 	if err != nil {
 		return track, err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow("%" + query + "%",guildid).Scan(&track.Name, &track.Data)
+	err = stmt.QueryRow("%" + query + "%",guildid).Scan(&track.ID, &track.Name, &track.Data)
 	return track, err
 }
 
+func GetGuildByID(id string) (guild models.Guild, err error){
+	stmt, err := DB.Prepare(`SELECT id, name, iconhash FROM guilds WHERE id LIKE ? LIMIT 1`)
+
+	if err != nil {
+		return guild, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(id).Scan(&guild.ID, &guild.Name, &guild.IconHash)
+	return guild,err
+}
 
 func GetGuilds() (guilds []models.Guild, err error){
 	rows, err := DB.Query(`SELECT id, name, iconhash FROM guilds`)
@@ -67,7 +78,7 @@ func GetGuilds() (guilds []models.Guild, err error){
 }
 
 func GetTracksPerGuild(guildid string) (tracks []models.Track, err error) {
-	stmt, err := DB.Prepare(`SELECT name, data FROM tracks WHERE guildid LIKE ?;`)
+	stmt, err := DB.Prepare(`SELECT id, name, data FROM tracks WHERE guildid LIKE ?;`)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +89,23 @@ func GetTracksPerGuild(guildid string) (tracks []models.Track, err error) {
 
 	for rows.Next() {
 		var t models.Track
-		if err := rows.Scan(&t.Name, &t.Data); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Data); err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, t)
 	}
 	return tracks, rows.Err()
+}
+
+func DeleteTrack(guildID string, trackID int) error {
+	stmt, err := DB.Prepare(`DELETE FROM tracks WHERE id = ? AND guildid = ?`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(trackID, guildID)
+	return err
 }
 
 func InsertGuild(id string, name string, iconhash string) (err error) {
