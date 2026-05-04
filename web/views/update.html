@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Edit Soundboard for {{.Guild.Name}} | Discord Soundboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body>
+    {{template "navbar" .}}
+    <h1>{{.Guild.Name}}</h1>
+    <div class="container mt-4">
+      <h2>Edit Track</h2>
+      <div id="error" class="alert alert-danger d-none"></div>
+      <form id="uploadForm">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="name" value="{{.Track.Name}}" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Audio File</label>
+          <input type="file" class="form-control" id="file" accept="audio/*">
+        </div>
+        <button type="submit" class="btn btn-primary">Edit</button>
+      </form>
+    </div>
+
+    <script>
+      document.getElementById('uploadForm').addEventListener('submit', e => {
+	  e.preventDefault()
+	  const form = new FormData()
+	  form.append('name', document.getElementById('name').value)
+	  form.append('data', document.getElementById('file').files[0])
+
+	  const guildID = {{ .Guild.ID }}
+	  const trackID = {{ .Track.ID }}
+
+	  fetch(`/guild/${guildID}/track/${trackID}`, {
+              method: 'PUT',
+              body: form
+	  })
+	      .then(res => {
+		  if (res.ok) {
+		      window.location.href = `/guild/${guildID}`
+		  } else {
+		      res.text().then(text => {
+			  const err = document.getElementById('error')
+			  err.textContent = text
+			  err.classList.remove('d-none')
+		      })
+		  }
+	      })
+      })
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  </body>
+</html>

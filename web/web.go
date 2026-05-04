@@ -121,6 +121,53 @@ func Start(sc chan os.Signal) {
 		}
 	})
 
+	mux.HandleFunc("GET /guild/{id}/update/{trackid}", func(w http.ResponseWriter, req *http.Request) {
+		tmpl, err := template.ParseFiles(
+			filepath.Join(viewsDir, "update.html"),
+			filepath.Join(viewsDir, "partial/navbar.html"),
+
+		)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// get guild
+		guild, err := db.GetGuildByID(req.PathValue("id"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		// get track to edit
+		tid,err := strconv.Atoi(req.PathValue("trackid"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		track, err := db.GetTrackByID(tid, guild.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		err = tmpl.Execute(w, struct {
+			Guild models.Guild
+			Track models.Track
+		}{
+			Guild: guild,
+			Track: track,
+		})
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return			
+		}
+	})
+	
+
+	// API ENDPOINTS
 	// Delete track
 	mux.HandleFunc("DELETE /guild/{guildid}/track/{trackid}", func (w http.ResponseWriter, req *http.Request) {
 		guildID := req.PathValue("guildid")
@@ -175,6 +222,52 @@ func Start(sc chan os.Signal) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
+	})
+
+	// Edit track
+	mux.HandleFunc("PUT /guild/{id}/track/{trackid}", func(w http.ResponseWriter, req *http.Request) {
+		req.ParseMultipartForm(32 << 20)
+
+		tid, err := strconv.Atoi(req.PathValue("trackid"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}	
+		
+		name := req.FormValue("name")
+		if name == "" {
+			http.Error(w, "missing name", http.StatusBadRequest)
+			return
+		}
+
+		file, _, err := req.FormFile("data")
+		if err == nil {
+			// to read mime type
+			data, err := io.ReadAll(file)
+			if err != nil || !filetype.IsAudio(data) {
+				http.Error(w, "file must be an audio file", http.StatusBadRequest)
+				return
+			}
+			defer file.Close()
+			
+			if err := db.UpdateTrack(tid, name, data); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusCreated)
+			
+			return
+		} else if err != nil { // No file provided
+			if err := db.UpdateTrackName(tid, name); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.WriteHeader(http.StatusCreated)
+		}
+		
+
 	})
 
 	err := http.ListenAndServe(":8080",mux)

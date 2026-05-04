@@ -48,6 +48,18 @@ func GetTrack(query string, guildid string) (track models.Track, err error) {
 	return track, err
 }
 
+func GetTrackByID(id int, guildid string) (track models.Track, err error) {
+	stmt, err := DB.Prepare(`SELECT id, name, data FROM tracks WHERE id = ? AND guildid LIKE ? LIMIT 1`)
+	if err != nil {
+		return track, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(id,guildid).Scan(&track.ID, &track.Name, &track.Data)
+	return track, err
+}
+
+
 func GetGuildByID(id string) (guild models.Guild, err error){
 	stmt, err := DB.Prepare(`SELECT id, name, iconhash FROM guilds WHERE id LIKE ? LIMIT 1`)
 
@@ -97,7 +109,7 @@ func GetTracksPerGuild(guildid string) (tracks []models.Track, err error) {
 	return tracks, rows.Err()
 }
 
-func DeleteTrack(guildID string, trackID int) error {
+func DeleteTrack(guildID string, trackID int) (err error) {
 	stmt, err := DB.Prepare(`DELETE FROM tracks WHERE id = ? AND guildid = ?`)
 	if err != nil {
 		return err
@@ -108,7 +120,7 @@ func DeleteTrack(guildID string, trackID int) error {
 	return err
 }
 
-func InsertTrack(guildID string, name string, data []byte) error {
+func InsertTrack(guildID string, name string, data []byte) (err error) {
     stmt, err := DB.Prepare(`INSERT INTO tracks (guildid, name, data) VALUES (?, ?, ?)`)
     if err != nil {
         return err
@@ -119,7 +131,7 @@ func InsertTrack(guildID string, name string, data []byte) error {
     return err
 }
 
-func UpdateTrack(id int, name string, data []byte) error {
+func UpdateTrack(id int, name string, data []byte) (err error) {
     stmt, err := DB.Prepare(`UPDATE tracks SET name = ?, data = ? WHERE id = ?`)
     if err != nil {
         return err
@@ -129,6 +141,18 @@ func UpdateTrack(id int, name string, data []byte) error {
     _, err = stmt.Exec(name, data, id)
     return err
 }
+
+func UpdateTrackName(id int, name string) (err error) {
+    stmt, err := DB.Prepare(`UPDATE tracks SET name = ? WHERE id = ?`)
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+
+    _, err = stmt.Exec(name, id)
+    return err
+}
+
 
 func InsertGuild(id string, name string, iconhash string) (err error) {
 	stmt, err := DB.Prepare(`INSERT OR REPLACE INTO guilds(id, name, iconhash) VALUES (?,?,?);`)

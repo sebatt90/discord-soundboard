@@ -19,8 +19,8 @@
       {{range $i, $track := .Tracks }}
       <li class="list-group-item">
 	<div>
-	  <p>{{$i}}. {{$track.Name}} </p>
-	  <button type="button" class="btn btn-primary">Edit</button>
+	  <p>{{$i}}. {{$track.Name}}</p>
+	  <a href="/guild/{{$.Guild.ID}}/update/{{$track.ID}}" class="btn btn-primary">Edit</a>
 	  <button class="btn btn-danger" 
 		  data-bs-toggle="modal" 
 		  data-bs-target="#deleteModal"
