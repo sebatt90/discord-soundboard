@@ -13,8 +13,12 @@ import (
 	"github.com/matthew-balzan/dca"
 )
 
-var q queue.Queue
-var vc *discordgo.VoiceConnection
+type GuildPlayer struct {
+    q queue.Queue
+    vc    *discordgo.VoiceConnection
+}
+
+var players = make(map[string]*GuildPlayer)
 
 func Start(bot *discordgo.Session, sc chan os.Signal) {
 	// Register event handlers here
@@ -32,6 +36,7 @@ func Start(bot *discordgo.Session, sc chan os.Signal) {
 
 	if err := bot.Open(); err != nil {
 		fmt.Fprintf(os.Stderr,"[ERROR] opening connection (%s)\n", err)
+		sc <- os.Interrupt
 	}
 
 }
@@ -49,19 +54,20 @@ func onMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if strings.HasPrefix(m.Content, "!play") {
-		play(s,m)
+		playSoundboard(s,m)
 	}
 
 	if strings.HasPrefix(m.Content, "!disconnect") {
-		if vc != nil {
-			vc.Disconnect()
-			q.Clear()
-			vc = nil
+		p, ok := players[m.GuildID]
+		if p.vc != nil && ok {
+			p.vc.Disconnect()
+			p.q.Clear()
+			p.vc = nil
 		}
 	}
 }
 
-func play(s *discordgo.Session, m *discordgo.MessageCreate){
+func playSoundboard(s *discordgo.Session, m *discordgo.MessageCreate){
 	var author *discordgo.User = m.Author
 	query := strings.TrimPrefix(m.Content, "!play ")
 
@@ -71,7 +77,7 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		return
 	}
 
-	// Insert guild to DB if not exists
+	// Insert guild to DB (or replace its data)
 	err = db.InsertGuild(guild.ID, guild.Name, guild.Icon)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Cannot add guild to DB (%s)\n",err)
@@ -92,16 +98,28 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 		return
 	}
 
+	// Create guild entry in hash map if not exists
+	if _, ok := players[guild.ID]; !ok {
+		players[guild.ID] = &GuildPlayer{}
+	}
+
+	var p *GuildPlayer
+	p, ok := players[guild.ID]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "[ERROR] guild not found in map\n")
+		return
+	}
+	
 	// Join the voice channel and start routine
-	if vc == nil {
-		vc, err = s.ChannelVoiceJoin(m.GuildID, voiceChannelID, false, false)
+	if p.vc == nil {
+		p.vc, err = s.ChannelVoiceJoin(m.GuildID, voiceChannelID, false, false)
 		if err != nil {
 			s.ChannelMessageSend(m.ChannelID, "Could not join voice channel.")
 			fmt.Fprintf(os.Stderr,"[ERROR] joining voice channel (%s)\n", err)
 			return
 		}
 
-		startRoutine()
+		go soundboardPlayer(p, guild.ID)
 	}
 	s.ChannelMessageSend(m.ChannelID, author.Username + " is querying: "+query)
 
@@ -117,36 +135,36 @@ func play(s *discordgo.Session, m *discordgo.MessageCreate){
 	s.ChannelMessageSend(m.ChannelID, "Enqueued closest match: **"+track.Name+"**")
 
 	// enqueue
-	q.Enqueue(track)
+	p.q.Enqueue(track)
 }
 
 
-func startRoutine() {
-	go func() {
-		for true {
-			for q.IsEmpty() { /* ackward wait*/ }
-			if vc == nil { break }
-			track := q.Dequeue()
-			if track == nil { continue }
-			encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
-			if err != nil {
-				fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
-				return
-			}
-	 		defer encodeSession.Cleanup()
-
-			
-			// Stream into the voice connection
-			vc.Speaking(true)
-			done := make(chan error)
-			dca.NewStream(encodeSession, vc, done)
-			if err := <-done; err != nil && err != io.EOF {
-				fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s)\n[INFO] ffmpeg messages: %s\n", err, encodeSession.FFMPEGMessages())
-				return
-			}
-
-			vc.Speaking(false)
+func soundboardPlayer(p *GuildPlayer, guildid string) {
+	for true {
+		for p.q.IsEmpty() { /* ackward wait*/ }
+		if p.vc == nil {
+			break
 		}
-	}()
+		track := p.q.Dequeue()
+		if track == nil { continue }
+		encodeSession, err := dca.EncodeMem(bytes.NewReader(track.Data), dca.StdEncodeOptions)
+		if err != nil {
+			fmt.Fprintf(os.Stderr,"[ERROR] encode error (%s) \n", err)
+			return
+		}
+		defer encodeSession.Cleanup()
+
+		
+		// Stream into the voice connection
+		p.vc.Speaking(true)
+		done := make(chan error)
+		dca.NewStream(encodeSession, p.vc, done)
+		if err := <-done; err != nil && err != io.EOF {
+			fmt.Fprintf(os.Stderr,"[ERROR] stream error (%s)\n[INFO] ffmpeg messages: %s\n", err, encodeSession.FFMPEGMessages())
+			return
+		}
+
+		p.vc.Speaking(false)
+	}
 
 }
